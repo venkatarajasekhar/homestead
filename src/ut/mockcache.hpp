@@ -161,7 +161,8 @@ public:
     MockGetIMSSubscription() : GetIMSSubscription("") {}
     virtual ~MockGetIMSSubscription() {}
 
-    MOCK_METHOD1(get_result, void(std::string& xml));
+    MOCK_METHOD2(get_xml, void(std::string& xml, int& ttl));
+    MOCK_METHOD2(get_registration_state, void(RegistrationState& state, int& ttl));
   };
 
   class MockGetAssociatedPublicIDs : public GetAssociatedPublicIDs
