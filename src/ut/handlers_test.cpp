@@ -68,6 +68,7 @@ public:
   static const std::string REGDATA_RESULT;
   static const std::string REGDATA_RESULT_UNREG;
   static const std::string REGDATA_RESULT_DEREG;
+  static const std::string REGDATA_BLANK_RESULT_DEREG;
   static const std::string VISITED_NETWORK;
   static const std::string AUTH_TYPE_DEREG;
   static const ServerCapabilities CAPABILITIES;
@@ -297,7 +298,61 @@ public:
     EXPECT_EQ(expected_result, req.content());
   }
 
-  void reg_data_template_no_hss(std::string body, bool use_impi, RegistrationState db_regstate, int db_ttl = 3600, std::string expected_result = REGDATA_RESULT) {
+  void reg_data_template_no_db(std::string body, bool use_impi, RegistrationState db_regstate, bool expect_sar, int expected_type, int db_ttl = 3600, std::string expected_result = REGDATA_RESULT, RegistrationState expected_new_state = RegistrationState::REGISTERED, bool expect_deletion = false) {
+    MockHttpStack::Request req(_httpstack,
+                               "/impu/" + IMPU + "/reg-data",
+                               "",
+                               use_impi ? "?private_id=" + IMPI : "",
+                               body,
+                               htp_method_PUT);
+    ImpuRegDataHandler::Config cfg(true, 3600);
+    ImpuRegDataHandler* handler = new ImpuRegDataHandler(req, &cfg);
+
+    MockCache::MockGetIMSSubscription mock_req;
+    EXPECT_CALL(*_cache, create_GetIMSSubscription(IMPU))
+      .WillOnce(Return(&mock_req));
+    EXPECT_CALL(*_cache, send(_, &mock_req))
+      .WillOnce(WithArgs<0>(Invoke(&mock_req, &Cache::Request::set_trx)));
+    handler->run();
+
+    Cache::Transaction* t = mock_req.get_trx();
+    ASSERT_FALSE(t == NULL);
+    EXPECT_CALL(mock_req, get_xml(_, _))
+      .WillRepeatedly(DoAll(SetArgReferee<0>(IMS_SUBSCRIPTION), SetArgReferee<1>(db_ttl)));
+    EXPECT_CALL(mock_req, get_registration_state(_, _))
+      .WillRepeatedly(DoAll(SetArgReferee<0>(db_regstate), SetArgReferee<1>(db_ttl)));
+    EXPECT_CALL(*_mock_stack, send(_, _, 200))
+      .Times(1)
+      .WillOnce(WithArgs<0,1>(Invoke(store_msg_tsx)));
+
+    t->on_success(&mock_req);
+
+    ASSERT_FALSE(_caught_diam_tsx == NULL);
+    Diameter::Message msg(_cx_dict, _caught_fd_msg, _mock_stack);
+    Cx::ServerAssignmentRequest sar(msg);
+    EXPECT_TRUE(sar.get_str_from_avp(_cx_dict->DESTINATION_REALM, test_str));
+    EXPECT_EQ(DEST_REALM, test_str);
+    EXPECT_TRUE(sar.get_str_from_avp(_cx_dict->DESTINATION_HOST, test_str));
+    EXPECT_EQ(DEST_HOST, test_str);
+      EXPECT_EQ(IMPI, sar.impi());
+      EXPECT_EQ(IMPU, sar.impu());
+      EXPECT_TRUE(sar.server_name(test_str));
+      EXPECT_EQ(DEFAULT_SERVER_NAME, test_str);
+      EXPECT_TRUE(sar.server_assignment_type(test_i32));
+      EXPECT_EQ(expected_type, test_i32);
+
+      Cx::ServerAssignmentAnswer saa(_cx_dict,
+                                     _mock_stack,
+                                     DIAMETER_SUCCESS,
+                                     IMS_SUBSCRIPTION);
+
+      EXPECT_CALL(*_httpstack, send_reply(_, 200));
+      _caught_diam_tsx->on_response(saa);
+    // Build the expected response and check it's correct
+    EXPECT_EQ(expected_result, req.content());
+  }
+
+  void reg_data_template_no_hss(std::string body, bool use_impi, RegistrationState db_regstate, int db_ttl = 3600, std::string expected_result = REGDATA_RESULT, bool expect_update = false, RegistrationState expected_new_state = RegistrationState::REGISTERED) {
     MockHttpStack::Request req(_httpstack,
                                "/impu/" + IMPU + "/reg-data",
                                "",
@@ -320,9 +375,23 @@ public:
       .WillRepeatedly(DoAll(SetArgReferee<0>(IMS_SUBSCRIPTION), SetArgReferee<1>(db_ttl)));
     EXPECT_CALL(mock_req, get_registration_state(_, _))
       .WillRepeatedly(DoAll(SetArgReferee<0>(db_regstate), SetArgReferee<1>(db_ttl)));
-    EXPECT_CALL(*_httpstack, send_reply(_, 200));
-    t->on_success(&mock_req);
 
+    if (expect_update) {
+      MockCache::MockPutIMSSubscription mock_req2;
+      EXPECT_CALL(*_cache, create_PutIMSSubscription(IMPU_IN_VECTOR, IMS_SUBSCRIPTION, expected_new_state, _, 7200, 7200))
+        .WillOnce(Return(&mock_req2));
+      EXPECT_CALL(*_cache, send(_, &mock_req2))
+        .WillOnce(WithArgs<0>(Invoke(&mock_req2, &Cache::Request::set_trx)));
+
+      EXPECT_CALL(*_httpstack, send_reply(_, 200));
+      t->on_success(&mock_req);
+
+      t = mock_req2.get_trx();
+      ASSERT_FALSE(t == NULL);
+    } else {
+      EXPECT_CALL(*_httpstack, send_reply(_, 200));
+      t->on_success(&mock_req);
+    }
     // Build the expected response and check it's correct
     EXPECT_EQ(expected_result, req.content());
   }
@@ -383,6 +452,7 @@ const std::string HandlersTest::IMS_SUBSCRIPTION = "<?xml version=\"1.0\"?><IMSS
   "</Identity></PublicIdentity></ServiceProfile></IMSSubscription>";
 const std::string HandlersTest::REGDATA_RESULT = "<ClearwaterRegData>\n\t<RegistrationState>REGISTERED</RegistrationState>\n\t<IMSSubscription>\n\t\t<PrivateID>impi@example.com</PrivateID>\n\t\t<ServiceProfile>\n\t\t\t<PublicIdentity>\n\t\t\t\t<Identity>sip:impu@example.com</Identity>\n\t\t\t</PublicIdentity>\n\t\t</ServiceProfile>\n\t</IMSSubscription>\n</ClearwaterRegData>\n\n";
 const std::string HandlersTest::REGDATA_RESULT_DEREG = "<ClearwaterRegData>\n\t<RegistrationState>NOT_REGISTERED</RegistrationState>\n\t<IMSSubscription>\n\t\t<PrivateID>impi@example.com</PrivateID>\n\t\t<ServiceProfile>\n\t\t\t<PublicIdentity>\n\t\t\t\t<Identity>sip:impu@example.com</Identity>\n\t\t\t</PublicIdentity>\n\t\t</ServiceProfile>\n\t</IMSSubscription>\n</ClearwaterRegData>\n\n";
+const std::string HandlersTest::REGDATA_BLANK_RESULT_DEREG = "<ClearwaterRegData>\n\t<RegistrationState>NOT_REGISTERED</RegistrationState>\n</ClearwaterRegData>\n\n";
 const std::string HandlersTest::REGDATA_RESULT_UNREG = "<ClearwaterRegData>\n\t<RegistrationState>UNREGISTERED</RegistrationState>\n\t<IMSSubscription>\n\t\t<PrivateID>impi@example.com</PrivateID>\n\t\t<ServiceProfile>\n\t\t\t<PublicIdentity>\n\t\t\t\t<Identity>sip:impu@example.com</Identity>\n\t\t\t</PublicIdentity>\n\t\t</ServiceProfile>\n\t</IMSSubscription>\n</ClearwaterRegData>\n\n";
 const std::string HandlersTest::VISITED_NETWORK = "visited-network.com";
 const std::string HandlersTest::AUTH_TYPE_DEREG = "DEREG";
@@ -425,6 +495,16 @@ TEST_F(HandlersTest, IMSSubscriptionRereg)
   reg_data_template_no_hss("reg", true, RegistrationState::REGISTERED);
 }
 
+TEST_F(HandlersTest, IMSSubscriptionReg)
+{
+  reg_data_template_no_hss("reg", true, RegistrationState::UNREGISTERED, 3600, REGDATA_RESULT, true, RegistrationState::REGISTERED);
+}
+
+TEST_F(HandlersTest, IMSSubscriptionDereg)
+{
+  reg_data_template_no_hss("dereg-user", true, RegistrationState::REGISTERED, 3600, REGDATA_RESULT_UNREG, true, RegistrationState::UNREGISTERED);
+}
+
 TEST_F(HandlersTest, IMSSubscriptionCall)
 {
   reg_data_template_no_hss("call", true, RegistrationState::REGISTERED);
@@ -465,7 +545,7 @@ TEST_F(HandlersTest, IMSSubscriptionCallHSSNewUnregisteredService)
   reg_data_template("call", true, RegistrationState::NOT_REGISTERED, true, 3, 0, REGDATA_RESULT_UNREG, RegistrationState::UNREGISTERED);
 }
 
-TEST_F(HandlersTest, IMSSubscriptionDereg)
+TEST_F(HandlersTest, IMSSubscriptionDeregHSS)
 {
   reg_data_template("dereg-user", true, RegistrationState::REGISTERED, true, 5, 0, REGDATA_RESULT_DEREG, RegistrationState::NOT_REGISTERED, true);
 }
@@ -483,6 +563,55 @@ TEST_F(HandlersTest, IMSSubscriptionDeregAdmin)
 TEST_F(HandlersTest, IMSSubscriptionDeregUseCacheIMPI)
 {
   reg_data_template("dereg-admin", false, RegistrationState::REGISTERED, true, 8, 0, REGDATA_RESULT_DEREG, RegistrationState::NOT_REGISTERED, true);
+}
+
+TEST_F(HandlersTest, IMSSubscriptionAuthFail)
+{
+  reg_data_template_no_db("dereg-auth-failed", false, RegistrationState::NOT_REGISTERED, true, 9, 0, REGDATA_RESULT_DEREG);
+}
+
+TEST_F(HandlersTest, IMSSubscriptionAuthFailRegistered)
+{
+  reg_data_template_no_db("dereg-auth-failed", false, RegistrationState::REGISTERED, true, 9, 0, REGDATA_RESULT);
+}
+
+TEST_F(HandlersTest, IMSSubscriptionAuthTimeout)
+{
+  reg_data_template_no_db("dereg-auth-timeout", false, RegistrationState::NOT_REGISTERED, true, 10, 0, REGDATA_RESULT_DEREG);
+}
+
+TEST_F(HandlersTest, IMSSubscriptionInvalidDereg)
+{
+  MockHttpStack::Request req(_httpstack,
+                             "/impu/" + IMPU + "/reg-data",
+                             "",
+                             "?private_id=" + IMPI,
+                             "dereg-user",
+                             htp_method_PUT);
+  ImpuRegDataHandler::Config cfg(false, 3600);
+  ImpuRegDataHandler* handler = new ImpuRegDataHandler(req, &cfg);
+
+  MockCache::MockGetIMSSubscription mock_req;
+  EXPECT_CALL(*_cache, create_GetIMSSubscription(IMPU))
+    .WillOnce(Return(&mock_req));
+  EXPECT_CALL(*_cache, send(_, &mock_req))
+    .WillOnce(WithArgs<0>(Invoke(&mock_req, &Cache::Request::set_trx)));
+  handler->run();
+
+  Cache::Transaction* t = mock_req.get_trx();
+  ASSERT_FALSE(t == NULL);
+  EXPECT_CALL(mock_req, get_xml(_, _))
+    .WillRepeatedly(SetArgReferee<0>(IMS_SUBSCRIPTION));
+  EXPECT_CALL(mock_req, get_registration_state(_, _))
+    .WillRepeatedly(SetArgReferee<0>(RegistrationState::NOT_REGISTERED));
+  EXPECT_CALL(*_httpstack, send_reply(_, 400));
+  t->on_success(&mock_req);
+
+  // Build the expected response and check it's correct
+  EXPECT_EQ("", req.content());
+
+  _caught_diam_tsx = NULL;
+  _caught_fd_msg = NULL;
 }
 
 
@@ -552,7 +681,116 @@ TEST_F(HandlersTest, IMSSubscriptionNoHSS)
   _caught_fd_msg = NULL;
 }
 
-TEST_F(HandlersTest, IMSSubscriptionCacheFailureNoHSSInvalidType)
+TEST_F(HandlersTest, IMSSubscriptionNoHSSDereg)
+{
+  MockHttpStack::Request req(_httpstack,
+                             "/impu/" + IMPU + "/reg-data",
+                             "",
+                             "?private_id=" + IMPI,
+                             "dereg-user");
+  ImpuRegDataHandler::Config cfg(false, 3600);
+  ImpuRegDataHandler* handler = new ImpuRegDataHandler(req, &cfg);
+
+  MockCache::MockGetIMSSubscription mock_req;
+  EXPECT_CALL(*_cache, create_GetIMSSubscription(IMPU))
+    .WillOnce(Return(&mock_req));
+  EXPECT_CALL(*_cache, send(_, &mock_req))
+    .WillOnce(WithArgs<0>(Invoke(&mock_req, &Cache::Request::set_trx)));
+  handler->run();
+
+  Cache::Transaction* t = mock_req.get_trx();
+  ASSERT_FALSE(t == NULL);
+  EXPECT_CALL(mock_req, get_xml(_, _))
+    .WillRepeatedly(SetArgReferee<0>(IMS_SUBSCRIPTION));
+  EXPECT_CALL(mock_req, get_registration_state(_, _))
+    .WillRepeatedly(SetArgReferee<0>(RegistrationState::REGISTERED));
+
+  MockCache::MockPutIMSSubscription mock_req2;
+  EXPECT_CALL(*_cache, create_PutIMSSubscription(IMPU_IN_VECTOR, IMS_SUBSCRIPTION, RegistrationState::UNREGISTERED, _, 7200, 7200))
+    .WillOnce(Return(&mock_req2));
+  EXPECT_CALL(*_cache, send(_, &mock_req2))
+    .WillOnce(WithArgs<0>(Invoke(&mock_req2, &Cache::Request::set_trx)));
+
+  EXPECT_CALL(*_httpstack, send_reply(_, 200));
+
+  t->on_success(&mock_req);
+
+  // Build the expected response and check it's correct
+  EXPECT_EQ(REGDATA_RESULT_UNREG, req.content());
+
+  _caught_diam_tsx = NULL;
+  _caught_fd_msg = NULL;
+}
+
+
+TEST_F(HandlersTest, IMSSubscriptionNoHSSUnknown)
+{
+  MockHttpStack::Request req(_httpstack,
+                             "/impu/" + IMPU + "/reg-data",
+                             "",
+                             "?private_id=" + IMPI,
+                             "reg");
+  ImpuRegDataHandler::Config cfg(false, 3600);
+  ImpuRegDataHandler* handler = new ImpuRegDataHandler(req, &cfg);
+
+  MockCache::MockGetIMSSubscription mock_req;
+  EXPECT_CALL(*_cache, create_GetIMSSubscription(IMPU))
+    .WillOnce(Return(&mock_req));
+  EXPECT_CALL(*_cache, send(_, &mock_req))
+    .WillOnce(WithArgs<0>(Invoke(&mock_req, &Cache::Request::set_trx)));
+  handler->run();
+
+  Cache::Transaction* t = mock_req.get_trx();
+  ASSERT_FALSE(t == NULL);
+  EXPECT_CALL(mock_req, get_xml(_, _))
+    .WillRepeatedly(SetArgReferee<0>(""));
+  EXPECT_CALL(mock_req, get_registration_state(_, _))
+    .WillRepeatedly(SetArgReferee<0>(RegistrationState::NOT_REGISTERED));
+  EXPECT_CALL(*_httpstack, send_reply(_, 404));
+  t->on_success(&mock_req);
+
+  // Build the expected response and check it's correct
+  EXPECT_EQ("", req.content());
+
+  _caught_diam_tsx = NULL;
+  _caught_fd_msg = NULL;
+}
+
+TEST_F(HandlersTest, IMSSubscriptionNoHSSUnknownCall)
+{
+  MockHttpStack::Request req(_httpstack,
+                             "/impu/" + IMPU + "/reg-data",
+                             "",
+                             "",
+                             "call");
+  ImpuRegDataHandler::Config cfg(false, 3600);
+  ImpuRegDataHandler* handler = new ImpuRegDataHandler(req, &cfg);
+
+  MockCache::MockGetIMSSubscription mock_req;
+  EXPECT_CALL(*_cache, create_GetIMSSubscription(IMPU))
+    .WillOnce(Return(&mock_req));
+  EXPECT_CALL(*_cache, send(_, &mock_req))
+    .WillOnce(WithArgs<0>(Invoke(&mock_req, &Cache::Request::set_trx)));
+  handler->run();
+
+  Cache::Transaction* t = mock_req.get_trx();
+  ASSERT_FALSE(t == NULL);
+  EXPECT_CALL(mock_req, get_xml(_, _))
+    .WillRepeatedly(SetArgReferee<0>(""));
+  EXPECT_CALL(mock_req, get_registration_state(_, _))
+    .WillRepeatedly(SetArgReferee<0>(RegistrationState::NOT_REGISTERED));
+  EXPECT_CALL(*_httpstack, send_reply(_, 404));
+  t->on_success(&mock_req);
+
+  // Build the expected response and check it's correct
+  EXPECT_EQ("", req.content());
+
+  _caught_diam_tsx = NULL;
+  _caught_fd_msg = NULL;
+}
+
+
+TEST_F(HandlersTest, IMSSubscriptionInvalidType)
 {
   MockHttpStack::Request req(_httpstack,
                              "/impu/" + IMPU + "/reg-data",
@@ -566,6 +804,22 @@ TEST_F(HandlersTest, IMSSubscriptionCacheFailureNoHSSInvalidType)
   EXPECT_CALL(*_httpstack, send_reply(_, 400));
   handler->run();
 }
+
+TEST_F(HandlersTest, IMSSubscriptionWrongMethod)
+{
+  MockHttpStack::Request req(_httpstack,
+                             "/impu/" + IMPU + "/reg-data",
+                             "",
+                             "",
+                             "reg",
+                             htp_method_DELETE);
+  ImpuRegDataHandler::Config cfg(false, 3600);
+  ImpuRegDataHandler* handler = new ImpuRegDataHandler(req, &cfg);
+
+  EXPECT_CALL(*_httpstack, send_reply(_, 405));
+  handler->run();
+}
+
 
 TEST_F(HandlersTest, IMSSubscriptionUserUnknownDereg)
 {
