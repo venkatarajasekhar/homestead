@@ -487,12 +487,14 @@ class PushProfileHandler : public Diameter::Stack::Handler
 public:
   struct Config
   {
-    Config(Cache* _cache, Cx::Dictionary* _dict,
+    Config(Cache* _cache,
+           Cx::Dictionary* _dict,
            int _impu_cache_ttl = 0,
            int _hss_reregistration_time = 3600) :
-           cache(_cache),
-           dict(_dict),
-           hss_reregistration_time(_hss_reregistration_time) {}
+      cache(_cache),
+      dict(_dict),
+      impu_cache_ttl(_impu_cache_ttl),
+      hss_reregistration_time(_hss_reregistration_time) {}
 
     Cache* cache;
     Cx::Dictionary* dict;

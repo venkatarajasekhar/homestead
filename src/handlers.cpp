@@ -230,6 +230,7 @@ void ImpiHandler::send_mar()
 {
   Cx::MultimediaAuthRequest* mar =
     new Cx::MultimediaAuthRequest(_dict,
+                                  _diameter_stack,
                                   _dest_realm,
                                   _dest_host,
                                   _impi,
@@ -439,6 +440,7 @@ void ImpiRegistrationStatusHandler::run()
 
     Cx::UserAuthorizationRequest* uar =
       new Cx::UserAuthorizationRequest(_dict,
+                                       _diameter_stack,
                                        _dest_host,
                                        _dest_realm,
                                        _impi,
@@ -548,6 +550,7 @@ void ImpuLocationInfoHandler::run()
 
     Cx::LocationInfoRequest* lir =
       new Cx::LocationInfoRequest(_dict,
+                                  _diameter_stack,
                                   _dest_host,
                                   _dest_realm,
                                   _originating,
@@ -858,6 +861,7 @@ void ImpuRegDataHandler::send_server_assignment_request(ServerAssignmentType typ
 {
   Cx::ServerAssignmentRequest* sar =
     new Cx::ServerAssignmentRequest(_dict,
+                                    _diameter_stack,
                                     _dest_host,
                                     _dest_realm,
                                     _impi,
@@ -1020,23 +1024,6 @@ void RegistrationTerminationHandler::run()
   {
     delete_identities();
   }
-
-  // Get the Auth-Session-State. RTRs are required to have an Auth-Session-State, so
-  // this AVP will be present.
-  int32_t auth_session_state = rtr.auth_session_state();
-
-  // Use our Cx layer to create a RTA object and add the correct AVPs. The RTA is
-  // created from the RTR. We currently always return DIAMETER_SUCCESS. We may want
-  // to return DIAMETER_UNABLE_TO_COMPLY for failures in future.
-  Cx::RegistrationTerminationAnswer rta(_msg,
-                                        _cfg->dict,
-                                        DIAMETER_REQ_SUCCESS,
-                                        auth_session_state,
-                                        _impis);
-
-  // Send the RTA back to the HSS.
-  LOG_INFO("Ready to send RTA");
-  rta.send();
 }
 
 void RegistrationTerminationHandler::on_get_public_ids_success(Cache::Request* request)
@@ -1071,6 +1058,23 @@ void RegistrationTerminationHandler::delete_identities()
   Cache::Request* delete_private_ids = _cfg->cache->create_DeletePrivateIDs(_impis, Cache::generate_timestamp());
   HssCacheHandler::CacheTransaction<RegistrationTerminationHandler>* private_ids_tsx = new HssCacheHandler::CacheTransaction<RegistrationTerminationHandler>(this);
   _cfg->cache->send(private_ids_tsx, delete_private_ids);
+
+  // Get the Auth-Session-State. RTRs are required to have an Auth-Session-State, so
+  // this AVP will be present.
+  int32_t auth_session_state = _msg.auth_session_state();
+
+  // Use our Cx layer to create a RTA object and add the correct AVPs. The RTA is
+  // created from the RTR. We currently always return DIAMETER_SUCCESS. We may want
+  // to return DIAMETER_UNABLE_TO_COMPLY for failures in future.
+  Cx::RegistrationTerminationAnswer rta(_msg,
+                                        _cfg->dict,
+                                        DIAMETER_REQ_SUCCESS,
+                                        auth_session_state,
+                                        _impis);
+
+  // Send the RTA back to the HSS.
+  LOG_INFO("Ready to send RTA");
+  rta.send();
 }
 
 void PushProfileHandler::run()
