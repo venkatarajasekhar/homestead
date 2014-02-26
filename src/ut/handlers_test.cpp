@@ -372,7 +372,7 @@ TEST_F(HandlersTest, IMSSubscriptionReregHSS)
   MockCache::MockPutIMSSubscription mock_req2;
   std::vector<std::string> impus;
   impus.push_back(IMPU);
-  EXPECT_CALL(*_cache, create_PutIMSSubscription(impus, IMS_SUBSCRIPTION, _, 3600))
+  EXPECT_CALL(*_cache, create_PutIMSSubscription(impus, IMS_SUBSCRIPTION, RegistrationState::REGISTERED, _, 7200, 7200))
     .WillOnce(Return(&mock_req2));
   EXPECT_CALL(*_cache, send(_, &mock_req2))
     .WillOnce(WithArgs<0>(Invoke(&mock_req2, &Cache::Request::set_trx)));
@@ -426,7 +426,7 @@ TEST_F(HandlersTest, IMSSubscriptionReg)
   MockCache::MockPutIMSSubscription mock_req;
   std::vector<std::string> impus;
   impus.push_back(IMPU);
-  EXPECT_CALL(*_cache, create_PutIMSSubscription(impus, IMS_SUBSCRIPTION, _, 3600))
+  EXPECT_CALL(*_cache, create_PutIMSSubscription(impus, IMS_SUBSCRIPTION, RegistrationState::REGISTERED, _, 3600, 3600))
     .WillOnce(Return(&mock_req));
   EXPECT_CALL(*_cache, send(_, &mock_req))
     .WillOnce(WithArgs<0>(Invoke(&mock_req, &Cache::Request::set_trx)));
@@ -689,7 +689,7 @@ TEST_F(HandlersTest, RegistrationStatusOptParamsSubseqRegCapabs)
   // but lots of code branches are tested. Specifically, optional parameters
   // on the HTTP request are added, and the success code
   // DIAMETER_SUBSEQUENT_REGISTRATION is returned by the HSS with a set of server
-  // capabilities. 
+  // capabilities.
   MockHttpStack::Request req(_httpstack,
                              "/impi/" + IMPI + "/",
                              "registration-status",
@@ -1007,7 +1007,7 @@ TEST_F(HandlersTest, RegistrationTerminationNoImpus)
 
   Diameter::Message msg(_cx_dict, _caught_fd_msg, _mock_stack);
   // Change the _free_on_delete flag to false, or we will try and
-  // free this message twice. 
+  // free this message twice.
   msg._free_on_delete = false;
   Cx::RegistrationTerminationAnswer rta(msg);
   EXPECT_TRUE(rta.result_code(test_i32));
@@ -1056,7 +1056,7 @@ TEST_F(HandlersTest, RegistrationTermination)
 
   Diameter::Message msg(_cx_dict, _caught_fd_msg, _mock_stack);
   // Change the _free_on_delete flag to false, or we will try and
-  // free this message twice. 
+  // free this message twice.
   msg._free_on_delete = false;
   Cx::RegistrationTerminationAnswer rta(msg);
   EXPECT_TRUE(rta.result_code(test_i32));
@@ -1094,7 +1094,7 @@ TEST_F(HandlersTest, PushProfile)
   MockCache::MockPutIMSSubscription mock_req2;
   std::vector<std::string> impus;
   impus.push_back(IMPU);
-  EXPECT_CALL(*_cache, create_PutIMSSubscription(impus, IMS_SUBSCRIPTION, _, 3600))
+  EXPECT_CALL(*_cache, create_PutIMSSubscription(impus, IMS_SUBSCRIPTION, RegistrationState::UNCHANGED, _, 7200, 7200))
     .WillOnce(Return(&mock_req2));
   EXPECT_CALL(*_cache, send(_, &mock_req2))
     .WillOnce(WithArgs<0>(Invoke(&mock_req2, &Cache::Request::set_trx)));
@@ -1112,7 +1112,7 @@ TEST_F(HandlersTest, PushProfile)
 
   Diameter::Message msg(_cx_dict, _caught_fd_msg, _mock_stack);
   // Change the _free_on_delete flag to false, or we will try and
-  // free this message twice. 
+  // free this message twice.
   msg._free_on_delete = false;
   Cx::PushProfileAnswer ppa(msg);
   EXPECT_TRUE(ppa.result_code(test_i32));
