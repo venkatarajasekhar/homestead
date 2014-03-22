@@ -17,7 +17,9 @@ TARGET_SOURCES := accesslogger.cpp \
                   counter.cpp \
                   cx.cpp \
                   diameterstack.cpp \
-                  handlers.cpp \
+                  handlers_scscf.cpp \
+                  handlers_icscf.cpp \
+                  handlers_requests.cpp \
                   httpconnection.cpp \
                   httpstack.cpp \
                   load_monitor.cpp \
