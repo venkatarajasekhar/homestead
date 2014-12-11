@@ -53,6 +53,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        httpstack_test.cpp \
                        httpstack_utils_test.cpp \
                        fakelogger.cpp \
+                       mockhttpstack.cpp \
                        mockfreediameter.cpp \
                        mock_sas.cpp \
                        realmmanager_test.cpp \
