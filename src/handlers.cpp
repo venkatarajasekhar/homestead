@@ -582,8 +582,8 @@ void ImpiRegistrationStatusTask::on_uar_response(Diameter::Message& rsp)
       (experimental_result_code == DIAMETER_FIRST_REGISTRATION) ||
       (experimental_result_code == DIAMETER_SUBSEQUENT_REGISTRATION))
   {
-    rapidjson::StringBuffer sb;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+   // rapidjson::StringBuffer sb ;
+   //  rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
     writer.StartObject();
     writer.String(JSON_RC.c_str());
     writer.Int(result_code ? result_code : experimental_result_code);
@@ -706,8 +706,8 @@ void ImpuLocationInfoTask::on_lir_response(Diameter::Message& rsp)
       (experimental_result_code == DIAMETER_UNREGISTERED_SERVICE) ||
       (experimental_result_code == DIAMETER_ERROR_IDENTITY_NOT_REGISTERED))
   {
-    rapidjson::StringBuffer sb;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+    //rapidjson::StringBuffer sb;
+    //rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
     writer.StartObject();
     writer.String(JSON_RC.c_str());
     writer.Int(result_code ? result_code : experimental_result_code);
@@ -793,8 +793,8 @@ void ImpuLocationInfoTask::on_get_reg_data_success(CassandraStore::Operation* op
   if (!xml.empty())
   {
     TRC_DEBUG("Got IMS subscription XML from cache - fake response for server %s", _server_name.c_str());
-    rapidjson::StringBuffer sb;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+    //rapidjson::StringBuffer sb;
+    //rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
     writer.StartObject();
     writer.String(JSON_RC.c_str());
     writer.Int(DIAMETER_SUCCESS);
