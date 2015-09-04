@@ -98,6 +98,10 @@ const int32_t DIAMETER_NO_COMMON_SECURITY     =   5017;
 // Result-Code AVP strings used in set_result_code function
 const std::string DIAMETER_REQ_SUCCESS = "DIAMETER_SUCCESS";
 const std::string DIAMETER_REQ_FAILURE = "DIAMETER_UNABLE_TO_COMPLY";
+const std::string DIAMETER_REQ_AVP_FAILURE  = "DIAMETER_AVP_UNSUPPORTED";
+const std::string DIAMETER_REQ_SESSION_ID_FAILURE =  "DIAMETER_UNKNOWN_SESSION_ID";
+const std::string DIAMETER_REQ_AUTHORIZATION_FAILURE = "DIAMETER_AUTHORIZATION_REJECTED";
+const std::string DIAMETER_REQ_AVP_VALUE_FAILURE    = "DIAMETER_INVALID_AVP_VALUE";
 
 // Deregistration-Reason Reason-Code AVP constants
 const int32_t PERMANENT_TERMINATION = 0;
