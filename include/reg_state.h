@@ -37,6 +37,6 @@
 #ifndef REG_STATE_H__
 #define REG_STATE_H__
 
-enum RegistrationState {REGISTERED, UNREGISTERED, NOT_REGISTERED, UNCHANGED};
+enum class RegistrationState {REGISTERED, UNREGISTERED, NOT_REGISTERED, UNCHANGED};
 
 #endif
