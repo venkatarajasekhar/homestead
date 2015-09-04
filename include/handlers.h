@@ -124,6 +124,13 @@ const std::string JSON_INTEGRITYKEY = "integritykey";
 const std::string JSON_RC = "result-code";
 const std::string JSON_SCSCF = "scscf";
 
+enum class StatsFlags
+  {
+    STAT_HSS_LATENCY              = 0x1,
+    STAT_HSS_DIGEST_LATENCY       = 0x2,
+    STAT_HSS_SUBSCRIPTION_LATENCY = 0x4,
+  };
+
 class HssCacheTask : public HttpStackUtils::Task
 {
 public:
@@ -148,13 +155,7 @@ public:
   void on_diameter_timeout();
 
   // Stats the HSS cache handlers can update.
-  enum StatsFlags
-  {
-    STAT_HSS_LATENCY              = 0x1,
-    STAT_HSS_DIGEST_LATENCY       = 0x2,
-    STAT_HSS_SUBSCRIPTION_LATENCY = 0x4,
-  };
-
+  
   template <class H>
   class DiameterTransaction : public Diameter::Transaction
   {
